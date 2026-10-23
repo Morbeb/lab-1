@@ -40,6 +40,7 @@ int main(void) {
         printf("[3] Посмотреть инвентарь\n");
         printf("[4] Положить предмет в слот\n");
         printf("[5] Выбросить предмет\n");
+        printf("[6] Выполнить задание по варианту\n");
         printf("----------------------------------------\n");
         printf("Выберите пункт меню: ");
 
@@ -169,6 +170,48 @@ int main(void) {
                 inventory[slot] = 0;
                 printf("\n----------------------------------------\n");
                 printf("Слот %d очищен.\n", slot);
+                printf("----------------------------------------\n");
+                break;
+            }
+
+            case 6: {
+                int duplicates_removed = 0;
+
+                printf("\n----------------------------------------\n");
+                printf("Инвентарь ДО устранения дубликатов:\n");
+                for (int i = 0; i < INVENTORY_SIZE; i++) {
+                    if (inventory[i] == 0) {
+                        printf("Слот %d: [0]\n", i);
+                    } else {
+                        printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i]));
+                    }
+                }
+
+                for (int i = 0; i < INVENTORY_SIZE; i++) {
+                    if (inventory[i] != 0) {
+                        for (int j = i + 1; j < INVENTORY_SIZE; j++) {
+                            if (inventory[j] == inventory[i]) {
+                                inventory[j] = 0;
+                                duplicates_removed++;
+                            }
+                        }
+                    }
+                }
+
+                printf("\nИнвентарь ПОСЛЕ устранения дубликатов:\n");
+                for (int i = 0; i < INVENTORY_SIZE; i++) {
+                    if (inventory[i] == 0) {
+                        printf("Слот %d: [0]\n", i);
+                    } else {
+                        printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i]));
+                    }
+                }
+
+                if (duplicates_removed > 0) {
+                    printf("\nДубликаты успешно устранены! Очищено слотов: %d\n", duplicates_removed);
+                } else {
+                    printf("\nДубликатов не обнаружено.\n");
+                }
                 printf("----------------------------------------\n");
                 break;
             }

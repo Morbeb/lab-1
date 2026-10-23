@@ -12,3 +12,6 @@ out/
 .idea/
 *.suo
 *.user
+
+diary.txt
+output.txt

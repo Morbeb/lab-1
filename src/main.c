@@ -2,6 +2,7 @@
 #include <string.h>
 
 #define INVENTORY_SIZE 10
+#define MAX_ITEMS 10
 #define MAX_NAME_LEN 32
 
 void clear_input_buffer(void) {
@@ -9,20 +10,53 @@ void clear_input_buffer(void) {
     while ((c = getchar()) != '\n' && c != EOF) {}
 }
 
-const char* get_item_name(int id) {
-    switch (id) {
-        case 0: return "Пусто";
-        case 1: return "Дерево";
-        case 2: return "Камень";
-        case 3: return "Семена";
-        case 4: return "Морковь";
-        case 5: return "Пшеница";
-        case 6: return "Яблоко";
-        case 7: return "Яйцо";
-        case 8: return "Шерсть";
-        case 9: return "Молоко";
-        default: return "Неизвестный предмет";
+int load_items(char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
+    const char *defaults[MAX_ITEMS] = {
+        "Пусто", "Дерево", "Камень", "Семена", "Морковь",
+        "Пшеница", "Яблоко", "Яйцо", "Шерсть", "Молоко"
+    };
+
+    for (int i = 0; i < MAX_ITEMS; i++) {
+        strncpy(item_names[i], defaults[i], MAX_NAME_LEN - 1);
+        item_names[i][MAX_NAME_LEN - 1] = '\0';
     }
+
+    FILE *f = fopen("items.txt", "r");
+    if (f == NULL) {
+        f = fopen("src/items.txt", "r");
+    }
+
+    if (f == NULL) {
+        return 0;
+    }
+
+    int id;
+    char name[MAX_NAME_LEN];
+    while (fscanf(f, "%d %31s", &id, name) == 2) {
+        if (id >= 0 && id < MAX_ITEMS) {
+            strncpy(item_names[id], name, MAX_NAME_LEN - 1);
+            item_names[id][MAX_NAME_LEN - 1] = '\0';
+        }
+    }
+
+    fclose(f);
+    return 1;
+}
+
+const char* get_item_name(int id, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
+    if (id >= 0 && id < MAX_ITEMS) {
+        return item_names[id];
+    }
+    return "Неизвестный предмет";
+}
+
+int find_item_by_name(const char item_names[MAX_ITEMS][MAX_NAME_LEN], int count, const char *name) {
+    for (int i = 0; i < count; i++) {
+        if (strcmp(item_names[i], name) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 void get_farmer_name(char *name, int max_len) {
@@ -49,6 +83,7 @@ void print_menu(const char *farmer_name) {
     printf("[4] Положить предмет в слот\n");
     printf("[5] Выбросить предмет\n");
     printf("[6] Задание лаб 1 (Устранение дубликатов)\n");
+    printf("[7] Поиск предмета по названию\n");
     printf("----------------------------------------\n");
     printf("Выберите пункт меню: ");
 }
@@ -87,19 +122,19 @@ void handle_work(int *day, int *hour) {
     print_time(*day, *hour);
 }
 
-void print_inventory(const int inventory[], int size) {
+void print_inventory(const int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
     printf("\n----------------------------------------\n");
     for (int i = 0; i < size; i++) {
         if (inventory[i] == 0) {
             printf("Слот %d: [0]\n", i);
         } else {
-            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i]));
+            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i], item_names));
         }
     }
     printf("----------------------------------------\n");
 }
 
-void handle_put_item(int inventory[], int size) {
+void handle_put_item(int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
     int slot;
     int item_id;
 
@@ -137,7 +172,7 @@ void handle_put_item(int inventory[], int size) {
 
     inventory[slot] = item_id;
     printf("\n----------------------------------------\n");
-    printf("В слот %d помещен предмет [%d] (%s).\n", slot, item_id, get_item_name(item_id));
+    printf("В слот %d помещен предмет [%d] (%s).\n", slot, item_id, get_item_name(item_id, item_names));
     printf("----------------------------------------\n");
 }
 
@@ -180,14 +215,14 @@ int eliminate_duplicates(int inventory[], int size) {
     return duplicates_removed;
 }
 
-void handle_duplicates(int inventory[], int size) {
+void handle_duplicates(int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
     printf("\n----------------------------------------\n");
     printf("Инвентарь ДО устранения дубликатов:\n");
     for (int i = 0; i < size; i++) {
         if (inventory[i] == 0) {
             printf("Слот %d: [0]\n", i);
         } else {
-            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i]));
+            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i], item_names));
         }
     }
 
@@ -198,7 +233,7 @@ void handle_duplicates(int inventory[], int size) {
         if (inventory[i] == 0) {
             printf("Слот %d: [0]\n", i);
         } else {
-            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i]));
+            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i], item_names));
         }
     }
 
@@ -210,13 +245,62 @@ void handle_duplicates(int inventory[], int size) {
     printf("----------------------------------------\n");
 }
 
+void handle_search_item(const int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
+    char search_name[MAX_NAME_LEN];
+    printf("Введите название предмета для поиска: ");
+    clear_input_buffer();
+    if (fgets(search_name, MAX_NAME_LEN, stdin) != NULL) {
+        size_t len = strlen(search_name);
+        if (len > 0 && search_name[len - 1] == '\n') {
+            search_name[len - 1] = '\0';
+        }
+    }
+
+    if (strlen(search_name) == 0) {
+        printf("\n----------------------------------------\n");
+        printf("Ошибка: пустое название!\n");
+        printf("----------------------------------------\n");
+        return;
+    }
+
+    int item_id = find_item_by_name(item_names, MAX_ITEMS, search_name);
+    if (item_id == -1) {
+        printf("\n----------------------------------------\n");
+        printf("Предмет \"%s\" не найден в каталоге!\n", search_name);
+        printf("----------------------------------------\n");
+        return;
+    }
+
+    printf("\n----------------------------------------\n");
+    printf("Результаты поиска для \"%s\" (ID: %d):\n", search_name, item_id);
+    int found_count = 0;
+    for (int i = 0; i < size; i++) {
+        if (inventory[i] == item_id) {
+            printf("Слот %d: [%d] (%s)\n", i, inventory[i], get_item_name(inventory[i], item_names));
+            found_count++;
+        }
+    }
+
+    if (found_count == 0) {
+        printf("Предмет отсутствует в инвентаре.\n");
+    } else {
+        printf("Всего найдено в инвентаре: %d шт.\n", found_count);
+    }
+    printf("----------------------------------------\n");
+}
+
 int main(void) {
     char farmer_name[MAX_NAME_LEN];
+    char item_names[MAX_ITEMS][MAX_NAME_LEN];
     int current_day = 1;
     int current_hour = 8;
     int inventory[INVENTORY_SIZE] = {1, 2, 1, 3, 0, 2, 4, 1, 5, 4};
     int is_running = 1;
     int choice;
+
+    if (!load_items(item_names)) {
+        printf("Предупреждение: файл items.txt не найден! Загружены базовые названия.\n");
+    }
 
     get_farmer_name(farmer_name, MAX_NAME_LEN);
 
@@ -248,11 +332,11 @@ int main(void) {
                 break;
 
             case 3:
-                print_inventory(inventory, INVENTORY_SIZE);
+                print_inventory(inventory, INVENTORY_SIZE, item_names);
                 break;
 
             case 4:
-                handle_put_item(inventory, INVENTORY_SIZE);
+                handle_put_item(inventory, INVENTORY_SIZE, item_names);
                 break;
 
             case 5:
@@ -260,7 +344,11 @@ int main(void) {
                 break;
 
             case 6:
-                handle_duplicates(inventory, INVENTORY_SIZE);
+                handle_duplicates(inventory, INVENTORY_SIZE, item_names);
+                break;
+
+            case 7:
+                handle_search_item(inventory, INVENTORY_SIZE, item_names);
                 break;
 
             default:

@@ -84,6 +84,7 @@ void print_menu(const char *farmer_name) {
     printf("[5] Выбросить предмет\n");
     printf("[6] Задание лаб 1 (Устранение дубликатов)\n");
     printf("[7] Поиск предмета по названию\n");
+    printf("[8] Записать состояние в дневник (diary.txt)\n");
     printf("----------------------------------------\n");
     printf("Выберите пункт меню: ");
 }
@@ -289,6 +290,52 @@ void handle_search_item(const int inventory[], int size, const char item_names[M
     printf("----------------------------------------\n");
 }
 
+int save_diary_entry(const char *filename, const char *farmer_name, int day, int hour, const int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
+    FILE *f = fopen(filename, "a");
+    if (f == NULL) {
+        return 0;
+    }
+
+    fprintf(f, "=== Запись в дневнике ===\n");
+    fprintf(f, "Фермер: %s\n", farmer_name);
+    fprintf(f, "Время: День %d, %02d:00\n", day, hour);
+    fprintf(f, "Инвентарь:\n");
+    for (int i = 0; i < size; i++) {
+        if (inventory[i] == 0) {
+            fprintf(f, "  Слот %d: Пусто\n", i);
+        } else {
+            fprintf(f, "  Слот %d: %s (ID: %d)\n", i, get_item_name(inventory[i], item_names), inventory[i]);
+        }
+    }
+    fprintf(f, "=========================\n\n");
+
+    fclose(f);
+    return 1;
+}
+
+void handle_save_diary(const char *farmer_name, int day, int hour, const int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
+    printf("\n----------------------------------------\n");
+    printf("=== Сводка состояния ===\n");
+    printf("Фермер: %s\n", farmer_name);
+    printf("Время: День %d, %02d:00\n", day, hour);
+    printf("Инвентарь:\n");
+    for (int i = 0; i < size; i++) {
+        if (inventory[i] == 0) {
+            printf("  Слот %d: Пусто\n", i);
+        } else {
+            printf("  Слот %d: %s (ID: %d)\n", i, get_item_name(inventory[i], item_names), inventory[i]);
+        }
+    }
+    printf("----------------------------------------\n");
+
+    if (save_diary_entry("diary.txt", farmer_name, day, hour, inventory, size, item_names)) {
+        printf("Запись успешно сохранена в diary.txt!\n");
+    } else {
+        printf("Ошибка: не удалось открыть diary.txt для записи!\n");
+    }
+    printf("----------------------------------------\n");
+}
+
 int main(void) {
     char farmer_name[MAX_NAME_LEN];
     char item_names[MAX_ITEMS][MAX_NAME_LEN];
@@ -349,6 +396,10 @@ int main(void) {
 
             case 7:
                 handle_search_item(inventory, INVENTORY_SIZE, item_names);
+                break;
+
+            case 8:
+                handle_save_diary(farmer_name, current_day, current_hour, inventory, INVENTORY_SIZE, item_names);
                 break;
 
             default:

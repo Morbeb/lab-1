@@ -6,6 +6,8 @@
 #include "player.h"
 #include "map.h"
 
+#define BASE_FLOOR_REWARD 15
+
 void print_menu(const Player *player) {
     printf("\n========================================\n");
     if (player != NULL) {
@@ -207,7 +209,7 @@ void handle_search_item(const int inventory[], int size, const char item_names[M
     printf("----------------------------------------\n");
 }
 
-void handle_adventure(Player *player) {
+void handle_adventure(Player *player, int *current_day, int *current_hour) {
     if (!check_player_exists(player)) {
         return;
     }
@@ -215,6 +217,13 @@ void handle_adventure(Player *player) {
     if (player->stamina <= 0) {
         printf("\n----------------------------------------\n");
         printf("У вас нет сил для похода (Выносливость: 0)! Отдохните и выспитесь.\n");
+        printf("----------------------------------------\n");
+        return;
+    }
+
+    if (*current_hour >= 2 && *current_hour < 8) {
+        printf("\n----------------------------------------\n");
+        printf("На часах глубокая ночь (%02d:00)! Ночью походы запрещены, пора спать.\n", *current_hour);
         printf("----------------------------------------\n");
         return;
     }
@@ -235,9 +244,17 @@ void handle_adventure(Player *player) {
     int player_y = map->start_y;
     int in_tower = 1;
 
-    printf("\nВы (%s, класс %s) вошли в древнюю башню!\n", player->name, get_profession_name(player->profession));
+    printf("\n======================================================================\n");
+    printf("Вы (%s, класс %s) смело ступаете в древнюю башню!\n", player->name, get_profession_name(player->profession));
+    printf("======================================================================\n");
 
     while (in_tower) {
+        printf("\n======================================================================\n");
+        printf(" HP: %d/%d | Выносливость: %d/%d | Золото: %d | Этаж: %d | Время: %02d:00\n",
+               player->hp, player->max_hp, player->stamina, player->max_stamina,
+               player->gold, map->current_floor, *current_hour);
+        printf("======================================================================\n");
+
         print_map(map, player_x, player_y);
 
         printf("Управление: [W] вверх, [A] влево, [S] вниз, [D] вправо, [Q] сбежать домой\n");
@@ -263,10 +280,10 @@ void handle_adventure(Player *player) {
             dx = 1;
         } else if (move == 'q' || move == 'Q') {
             if (player_x == map->start_x && player_y == map->start_y) {
-                printf("\n========================================\n");
-                printf("Вы стоите на лестнице вниз и сбегаете домой на ферму!\n");
-                printf("Итог экспедиции: покорено этажей башни — %d.\n", map->current_floor);
-                printf("========================================\n");
+                printf("\n======================================================================\n");
+                printf("Вы стоите на лестнице вниз (D) и благополучно возвращаетесь на ферму!\n");
+                printf("Итог экспедиции: покорено этажей — %d, сохранено золота: %d.\n", map->current_floor, player->gold);
+                printf("======================================================================\n");
                 in_tower = 0;
                 break;
             } else {
@@ -303,7 +320,38 @@ void handle_adventure(Player *player) {
             printf("Путь преграждает препятствие (%s)!\n", cell == 'T' ? "обломок балки" : "груда камней");
             printf("----------------------------------------\n");
             continue;
-        } else if (cell == '^') {
+        }
+
+        // Расход выносливости за шаг (с учетом пассивного бонуса Разведчика)
+        int stamina_cost = 1;
+        if (player->profession == PROF_SCOUT) {
+            if (rand() % 2 == 0) {
+                stamina_cost = 0;
+                printf("[Пассивный бонус Разведчика: легкий шаг не отнял сил!]\n");
+            }
+        }
+        player->stamina -= stamina_cost;
+
+        // Проверка обморока от истощения сил
+        if (player->stamina <= 0) {
+            printf("\n======================================================================\n");
+            printf("ОБМОРОК! Ваша выносливость упала до нуля!\n");
+            printf("Вы упали без сил посреди древней башни.\n");
+            int fee = player->gold / 2;
+            player->gold -= fee;
+            printf("Спасательная служба эвакуировала вас на ферму.\n");
+            printf("За спасение изъято 50%% золота (-%d монет). Осталось: %d.\n", fee, player->gold);
+            sleep_to_morning(current_day, current_hour);
+            player->hp = player->max_hp;
+            player->stamina = player->max_stamina;
+            printf("Наступило утро следующего дня (День %d, 08:00). Силы полностью восстановлены.\n", *current_day);
+            printf("======================================================================\n");
+            free_map(&map);
+            return;
+        }
+
+        // Ловушка-руна
+        if (cell == '^') {
             player_x = target_x;
             player_y = target_y;
             trigger_rune_trap(map, &player_x, &player_y);
@@ -313,11 +361,40 @@ void handle_adventure(Player *player) {
         player_x = target_x;
         player_y = target_y;
 
+        // Переход на следующий этаж
         if (player_x == map->up_x && player_y == map->up_y) {
-            printf("\n----------------------------------------\n");
+            int reward = BASE_FLOOR_REWARD * map->current_floor;
+            player->gold += reward;
+            player->stamina -= 5;
+            wait_hours(current_day, current_hour, 1);
+
+            printf("\n======================================================================\n");
             printf("Вы ступили на лестницу вверх (U)!\n");
-            printf("Подъем на следующий этаж: %d -> %d...\n", map->current_floor, map->current_floor + 1);
-            printf("----------------------------------------\n");
+            printf("Подъем на этаж: %d -> %d! (Затрачено: 5 энергии, +1 час времени)\n",
+                   map->current_floor, map->current_floor + 1);
+            printf("Награда за исследование этажа: +%d золота! (Всего золота: %d)\n", reward, player->gold);
+            printf("======================================================================\n");
+
+            // Проверка обморока по стамине или наступления 02:00 ночи
+            if (player->stamina <= 0 || (*current_hour >= 2 && *current_hour < 8)) {
+                printf("\n======================================================================\n");
+                if (player->stamina <= 0) {
+                    printf("ОБМОРОК! Вы обессилели во время крутого подъема по лестнице!\n");
+                } else {
+                    printf("ОБМОРОК! На часах наступило 02:00 ночи! В темноте башни вас сморил сон.\n");
+                }
+                int fee = player->gold / 2;
+                player->gold -= fee;
+                printf("Спасательная служба эвакуировала вас на ферму.\n");
+                printf("За спасение изъято 50%% золота (-%d монет). Осталось: %d.\n", fee, player->gold);
+                sleep_to_morning(current_day, current_hour);
+                player->hp = player->max_hp;
+                player->stamina = player->max_stamina;
+                printf("Наступило утро следующего дня (День %d, 08:00). Силы полностью восстановлены.\n", *current_day);
+                printf("======================================================================\n");
+                free_map(&map);
+                return;
+            }
 
             int next_floor = map->current_floor + 1;
             free_map(&map);
@@ -436,7 +513,7 @@ int main(void) {
                 break;
 
             case 11:
-                handle_adventure(player);
+                handle_adventure(player, &current_day, &current_hour);
                 break;
 
             default:

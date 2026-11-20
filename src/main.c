@@ -554,6 +554,27 @@ void generate_tower_floor(char **map, int height, int width, int *player_x, int 
     map[uy][ux] = 'U';
     *up_x = ux;
     *up_y = uy;
+
+    int rune_count = (width * height) / 35;
+    if (rune_count < 2) {
+        rune_count = 2;
+    }
+    if (rune_count > 5) {
+        rune_count = 5;
+    }
+
+    for (int k = 0; k < rune_count; k++) {
+        int rx, ry, attempts = 0;
+        do {
+            rx = 1 + rand() % (width - 2);
+            ry = 1 + rand() % (height - 2);
+            attempts++;
+        } while (map[ry][rx] != '.' && attempts < 100);
+
+        if (map[ry][rx] == '.') {
+            map[ry][rx] = '^';
+        }
+    }
 }
 
 void print_map(char **map, int height, int width, int player_x, int player_y, int floor_num) {
@@ -577,6 +598,7 @@ void print_map(char **map, int height, int width, int player_x, int player_y, in
     printf("  @ - Герой             # - Стена башни\n");
     printf("  . - Пол               T, R - Препятствия\n");
     printf("  D - Лестница вниз     U - Лестница вверх\n");
+    printf("  ^ - Руна телепортации (ловушка)\n");
     printf("----------------------------------------\n");
 }
 
@@ -664,6 +686,31 @@ void handle_adventure(void) {
             printf("\n----------------------------------------\n");
             printf("Путь преграждает препятствие (%s)!\n", cell == 'T' ? "обломок балки" : "груда камней");
             printf("----------------------------------------\n");
+            continue;
+        } else if (cell == '^') {
+            map[target_y][target_x] = '.';
+
+            int tx = target_x;
+            int ty = target_y;
+            int attempts = 0;
+            do {
+                int rx = 1 + rand() % (width - 2);
+                int ry = 1 + rand() % (height - 2);
+                if (map[ry][rx] == '.') {
+                    tx = rx;
+                    ty = ry;
+                    break;
+                }
+                attempts++;
+            } while (attempts < 200);
+
+            player_x = tx;
+            player_y = ty;
+
+            printf("\n========================================\n");
+            printf("ВСПЫШКА МАГИИ! Вы наступили на руну (^)\n");
+            printf("Телепортационная ловушка перенесла вас в другое место этажа!\n");
+            printf("========================================\n");
             continue;
         }
 

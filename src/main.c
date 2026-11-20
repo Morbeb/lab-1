@@ -625,7 +625,10 @@ void handle_adventure(void) {
             dx = 1;
         } else if (move == 'q' || move == 'Q') {
             if (map[player_y][player_x] == 'D') {
-                printf("\nВы стоите на лестнице вниз и благополучно сбегаете домой на ферму!\n");
+                printf("\n========================================\n");
+                printf("Вы стоите на лестнице вниз и сбегаете домой на ферму!\n");
+                printf("Итог экспедиции: покорено этажей башни — %d.\n", current_floor);
+                printf("========================================\n");
                 in_tower = 0;
                 break;
             } else {
@@ -668,7 +671,23 @@ void handle_adventure(void) {
         player_y = target_y;
 
         if (map[player_y][player_x] == 'U') {
-            printf("\nВы стоите перед лестницей на следующий этаж (U)!\n");
+            printf("\n----------------------------------------\n");
+            printf("Вы ступили на лестницу вверх (U)!\n");
+            printf("Подъем на следующий этаж: %d -> %d...\n", current_floor, current_floor + 1);
+            printf("----------------------------------------\n");
+
+            free_map(map, height);
+            current_floor++;
+
+            height = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
+            width = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
+            map = create_map(height, width);
+            if (map == NULL) {
+                printf("Ошибка выделения памяти для этажа %d!\n", current_floor);
+                return;
+            }
+
+            generate_tower_floor(map, height, width, &player_x, &player_y, &up_x, &up_y);
         } else if (map[player_y][player_x] == 'D') {
             printf("\nВы стоите на лестнице вниз (D). Отсюда можно сбежать домой (Q).\n");
         }

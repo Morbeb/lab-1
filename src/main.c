@@ -1,12 +1,18 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define INVENTORY_SIZE 10
 #define MAX_ITEMS 10
 #define MAX_NAME_LEN 32
 #define MAX_MAP_ROWS 100
-#define MaX_MAP_COLS 256
+#define MAX_MAP_COLS 256
 #define MAX_LINE_LEN 256
+
+#define MIN_TOWER_SIZE 5
+#define MAX_TOWER_SIZE 30
+#define OBSTACLE_CHANCE 20
 
 void clear_input_buffer(void) {
     int c;
@@ -374,7 +380,7 @@ int decompress_rle_line(const char *compressed, char *decompressed, int max_len)
     return out_idx;
 }
 
-int unpack_map(const char *in_filename, const char *out_filename, char map[MAX_MAP_ROWS][MaX_MAP_COLS], int *rows, int *cols, char *error_msg, int max_err_len) {
+int unpack_map(const char *in_filename, const char *out_filename, char map[MAX_MAP_ROWS][MAX_MAP_COLS], int *rows, int *cols, char *error_msg, int max_err_len) {
     FILE *in = fopen(in_filename, "r");
     if (in == NULL) {
         char fallback[64];
@@ -408,13 +414,13 @@ int unpack_map(const char *in_filename, const char *out_filename, char map[MAX_M
             break;
         }
 
-        int decomp_len = decompress_rle_line(buffer, map[*rows], MaX_MAP_COLS);
+        int decomp_len = decompress_rle_line(buffer, map[*rows], MAX_MAP_COLS);
         if (decomp_len == -1) {
             snprintf(error_msg, max_err_len, "Ошибка в строке %d: некорректный формат RLE (\"%s\")", *rows + 1, buffer);
             success = 0;
             break;
         } else if (decomp_len == -2) {
-            snprintf(error_msg, max_err_len, "Ошибка в строке %d: первышена максимальная длина строки (%d символов)", *rows + 1, MaX_MAP_COLS - 1);
+            snprintf(error_msg, max_err_len, "Ошибка в строке %d: первышена максимальная длина строки (%d символов)", *rows + 1, MAX_MAP_COLS - 1);
             success = 0;
             break;
         }
@@ -459,7 +465,7 @@ int unpack_map(const char *in_filename, const char *out_filename, char map[MAX_M
 }
 
 void handle_unpack_map(void) {
-    char map[MAX_MAP_ROWS][MaX_MAP_COLS];
+    char map[MAX_MAP_ROWS][MAX_MAP_COLS];
     int rows = 0;
     int cols = 0;
     char error_msg[256] = "";
@@ -481,7 +487,100 @@ void handle_unpack_map(void) {
      printf("----------------------------------------\n");
 }
 
+char** create_map(int height, int width) {
+    char **map = (char **)malloc(height * sizeof(char *));
+    if (map == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < height; i++) {
+        map[i] = (char *)malloc(width * sizeof(char));
+        if (map[i] == NULL) {
+            for (int j = 0; j < i; j++) {
+                free(map[j]);
+            }
+            free(map);
+            return NULL;
+        }
+    }
+
+    return map;
+}
+
+void free_map(char **map, int height) {
+    if (map == NULL) {
+        return;
+    }
+
+    for (int i = 0; i < height; i++) {
+        if (map[i] != NULL) {
+            free(map[i]);
+        }
+    }
+    free(map);
+}
+
+void generate_tower_floor(char **map, int height, int width, int *player_x, int *player_y, int *up_x, int *up_y) {
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            if (i == 0 || i == height - 1 || j == 0 || j == width - 1) {
+                map[i][j] = '#';
+            } else {
+                int r = rand() % 100;
+                if (r < OBSTACLE_CHANCE / 2) {
+                    map[i][j] = 'T';
+                } else if (r < OBSTACLE_CHANCE) {
+                    map[i][j] = 'R';
+                } else {
+                    map[i][j] = '.';
+                }
+            }
+        }
+    }
+
+    int sx = 1 + rand() % (width - 2);
+    int sy = 1 + rand() % (height - 2);
+    map[sy][sx] = 'D';
+    *player_x = sx;
+    *player_y = sy;
+
+    int ux, uy;
+    do {
+        ux = 1 + rand() % (width - 2);
+        uy = 1 + rand() % (height - 2);
+    } while (ux == sx && uy == sy);
+
+    map[uy][ux] = 'U';
+    *up_x = ux;
+    *up_y = uy;
+}
+
+void print_map(char **map, int height, int width, int player_x, int player_y, int floor_num) {
+    printf("\n========================================\n");
+    printf("        БАШНЯ: ЭТАЖ %d (%d x %d)\n", floor_num, width, height);
+    printf("========================================\n");
+
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            if (i == player_y && j == player_x) {
+                printf("@");
+            } else {
+                printf("%c", map[i][j]);
+            }
+        }
+        printf("\n");
+    }
+
+    printf("----------------------------------------\n");
+    printf("Обозначения:\n");
+    printf("  @ - Герой             # - Стена башни\n");
+    printf("  . - Пол               T, R - Препятствия\n");
+    printf("  D - Лестница вниз     U - Лестница вверх\n");
+    printf("----------------------------------------\n");
+}
+
 int main(void) {
+    srand((unsigned int)time(NULL));
     char farmer_name[MAX_NAME_LEN];
     char item_names[MAX_ITEMS][MAX_NAME_LEN];
     int current_day = 1;

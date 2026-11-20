@@ -4,10 +4,7 @@
 #include <time.h>
 #include "utils.h"
 #include "player.h"
-
-#define MIN_TOWER_SIZE 5
-#define MAX_TOWER_SIZE 30
-#define OBSTACLE_CHANCE 20
+#include "map.h"
 
 void print_menu(const Player *player) {
     printf("\n========================================\n");
@@ -210,120 +207,6 @@ void handle_search_item(const int inventory[], int size, const char item_names[M
     printf("----------------------------------------\n");
 }
 
-char** create_map(int height, int width) {
-    char **map = (char **)malloc(height * sizeof(char *));
-    if (map == NULL) {
-        return NULL;
-    }
-
-    for (int i = 0; i < height; i++) {
-        map[i] = (char *)malloc(width * sizeof(char));
-        if (map[i] == NULL) {
-            for (int j = 0; j < i; j++) {
-                free(map[j]);
-            }
-            free(map);
-            return NULL;
-        }
-    }
-
-    return map;
-}
-
-void free_map(char **map, int height) {
-    if (map == NULL) {
-        return;
-    }
-
-    for (int i = 0; i < height; i++) {
-        if (map[i] != NULL) {
-            free(map[i]);
-        }
-    }
-    free(map);
-}
-
-void generate_tower_floor(char **map, int height, int width, int *player_x, int *player_y, int *up_x, int *up_y) {
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            if (i == 0 || i == height - 1 || j == 0 || j == width - 1) {
-                map[i][j] = '#';
-            } else {
-                int r = rand() % 100;
-                if (r < OBSTACLE_CHANCE / 2) {
-                    map[i][j] = 'T';
-                } else if (r < OBSTACLE_CHANCE) {
-                    map[i][j] = 'R';
-                } else {
-                    map[i][j] = '.';
-                }
-            }
-        }
-    }
-
-    int sx = 1 + rand() % (width - 2);
-    int sy = 1 + rand() % (height - 2);
-    map[sy][sx] = 'D';
-    *player_x = sx;
-    *player_y = sy;
-
-    int ux, uy;
-    do {
-        ux = 1 + rand() % (width - 2);
-        uy = 1 + rand() % (height - 2);
-    } while (ux == sx && uy == sy);
-
-    map[uy][ux] = 'U';
-    *up_x = ux;
-    *up_y = uy;
-
-    int rune_count = (width * height) / 35;
-    if (rune_count < 2) {
-        rune_count = 2;
-    }
-    if (rune_count > 5) {
-        rune_count = 5;
-    }
-
-    for (int k = 0; k < rune_count; k++) {
-        int rx, ry, attempts = 0;
-        do {
-            rx = 1 + rand() % (width - 2);
-            ry = 1 + rand() % (height - 2);
-            attempts++;
-        } while (map[ry][rx] != '.' && attempts < 100);
-
-        if (map[ry][rx] == '.') {
-            map[ry][rx] = '^';
-        }
-    }
-}
-
-void print_map(char **map, int height, int width, int player_x, int player_y, int floor_num) {
-    printf("\n========================================\n");
-    printf("        БАШНЯ: ЭТАЖ %d (%d x %d)\n", floor_num, width, height);
-    printf("========================================\n");
-
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            if (i == player_y && j == player_x) {
-                printf("@");
-            } else {
-                printf("%c", map[i][j]);
-            }
-        }
-        printf("\n");
-    }
-
-    printf("----------------------------------------\n");
-    printf("Обозначения:\n");
-    printf("  @ - Герой             # - Стена башни\n");
-    printf("  . - Пол               T, R - Препятствия\n");
-    printf("  D - Лестница вниз     U - Лестница вверх\n");
-    printf("  ^ - Руна телепортации (ловушка)\n");
-    printf("----------------------------------------\n");
-}
-
 void handle_adventure(Player *player) {
     if (!check_player_exists(player)) {
         return;
@@ -339,7 +222,7 @@ void handle_adventure(Player *player) {
     int height = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
     int width = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
 
-    char **map = create_map(height, width);
+    Map *map = create_map(width, height, 1);
     if (map == NULL) {
         printf("\n----------------------------------------\n");
         printf("Ошибка: не удалось выделить память под карту башни!\n");
@@ -347,15 +230,15 @@ void handle_adventure(Player *player) {
         return;
     }
 
-    int player_x, player_y, up_x, up_y;
-    generate_tower_floor(map, height, width, &player_x, &player_y, &up_x, &up_y);
-    int current_floor = 1;
+    generate_tower_floor(map);
+    int player_x = map->start_x;
+    int player_y = map->start_y;
     int in_tower = 1;
 
     printf("\nВы (%s, класс %s) вошли в древнюю башню!\n", player->name, get_profession_name(player->profession));
 
     while (in_tower) {
-        print_map(map, height, width, player_x, player_y, current_floor);
+        print_map(map, player_x, player_y);
 
         printf("Управление: [W] вверх, [A] влево, [S] вниз, [D] вправо, [Q] сбежать домой\n");
         printf("Ваш ход: ");
@@ -379,10 +262,10 @@ void handle_adventure(Player *player) {
         } else if (move == 'd' || move == 'D') {
             dx = 1;
         } else if (move == 'q' || move == 'Q') {
-            if (map[player_y][player_x] == 'D') {
+            if (player_x == map->start_x && player_y == map->start_y) {
                 printf("\n========================================\n");
                 printf("Вы стоите на лестнице вниз и сбегаете домой на ферму!\n");
-                printf("Итог экспедиции: покорено этажей башни — %d.\n", current_floor);
+                printf("Итог экспедиции: покорено этажей башни — %d.\n", map->current_floor);
                 printf("========================================\n");
                 in_tower = 0;
                 break;
@@ -402,14 +285,14 @@ void handle_adventure(Player *player) {
         int target_x = player_x + dx;
         int target_y = player_y + dy;
 
-        if (target_x < 0 || target_x >= width || target_y < 0 || target_y >= height) {
+        if (!is_valid_coord(map, target_x, target_y)) {
             printf("\n----------------------------------------\n");
             printf("Вы не можете выйти за границы карты!\n");
             printf("----------------------------------------\n");
             continue;
         }
 
-        char cell = map[target_y][target_x];
+        char cell = map->grid[target_y][target_x];
         if (cell == '#') {
             printf("\n----------------------------------------\n");
             printf("Там каменная стена! Прохода нет.\n");
@@ -421,59 +304,41 @@ void handle_adventure(Player *player) {
             printf("----------------------------------------\n");
             continue;
         } else if (cell == '^') {
-            map[target_y][target_x] = '.';
-
-            int tx = target_x;
-            int ty = target_y;
-            int attempts = 0;
-            do {
-                int rx = 1 + rand() % (width - 2);
-                int ry = 1 + rand() % (height - 2);
-                if (map[ry][rx] == '.') {
-                    tx = rx;
-                    ty = ry;
-                    break;
-                }
-                attempts++;
-            } while (attempts < 200);
-
-            player_x = tx;
-            player_y = ty;
-
-            printf("\n========================================\n");
-            printf("ВСПЫШКА МАГИИ! Вы наступили на руну (^)\n");
-            printf("Телепортационная ловушка перенесла вас в другое место этажа!\n");
-            printf("========================================\n");
+            player_x = target_x;
+            player_y = target_y;
+            trigger_rune_trap(map, &player_x, &player_y);
             continue;
         }
 
         player_x = target_x;
         player_y = target_y;
 
-        if (map[player_y][player_x] == 'U') {
+        if (player_x == map->up_x && player_y == map->up_y) {
             printf("\n----------------------------------------\n");
             printf("Вы ступили на лестницу вверх (U)!\n");
-            printf("Подъем на следующий этаж: %d -> %d...\n", current_floor, current_floor + 1);
+            printf("Подъем на следующий этаж: %d -> %d...\n", map->current_floor, map->current_floor + 1);
             printf("----------------------------------------\n");
 
-            free_map(map, height);
-            current_floor++;
+            int next_floor = map->current_floor + 1;
+            free_map(&map);
 
             height = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
             width = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
-            map = create_map(height, width);
+            map = create_map(width, height, next_floor);
             if (map == NULL) {
-                printf("Ошибка выделения памяти для этажа %d!\n", current_floor);
+                printf("Ошибка выделения памяти для этажа %d!\n", next_floor);
                 return;
             }
 
-            generate_tower_floor(map, height, width, &player_x, &player_y, &up_x, &up_y);
-        } else if (map[player_y][player_x] == 'D') {
+            generate_tower_floor(map);
+            player_x = map->start_x;
+            player_y = map->start_y;
+        } else if (player_x == map->start_x && player_y == map->start_y) {
             printf("\nВы стоите на лестнице вниз (D). Отсюда можно сбежать домой (Q).\n");
         }
     }
 
-    free_map(map, height);
+    free_map(&map);
 }
 
 int main(void) {

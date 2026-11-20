@@ -3,63 +3,44 @@
 #include <stdlib.h>
 #include <time.h>
 #include "utils.h"
+#include "player.h"
 
 #define MIN_TOWER_SIZE 5
 #define MAX_TOWER_SIZE 30
 #define OBSTACLE_CHANCE 20
 
-void get_farmer_name(char *name, int max_len) {
-    printf("Введите имя фермера: ");
-    if (fgets(name, max_len, stdin) != NULL) {
-        size_t len = strlen(name);
-        if (len > 0 && name[len - 1] == '\n') {
-            name[len - 1] = '\0';
-        }
-    }
-    if (strlen(name) == 0) {
-        strcpy(name, "Фермер");
-    }
-}
-
-void print_menu(const char *farmer_name) {
+void print_menu(const Player *player) {
     printf("\n========================================\n");
-    printf("        ХОЗЯЙСТВО: %s\n", farmer_name);
+    if (player != NULL) {
+        printf("    ХОЗЯЙСТВО: %s [%s]\n", player->name, get_profession_name(player->profession));
+    } else {
+        printf("    ХОЗЯЙСТВО: Персонаж не создан\n");
+    }
     printf("========================================\n");
     printf("[0] Выход\n");
-    printf("[1] Посмотреть на часы\n");
-    printf("[2] Промотать время (Поработать)\n");
-    printf("[3] Посмотреть инвентарь\n");
-    printf("[4] Положить предмет в слот\n");
-    printf("[5] Выбросить предмет\n");
-    printf("[6] Задание лаб 1 (Устранение дубликатов)\n");
-    printf("[7] Поиск предмета по названию\n");
-    printf("[8] Записать состояние в дневник (diary.txt)\n");
-    printf("[9] Распаковать карту участка (output.txt)\n");
-    printf("[10] Отправиться в приключение (Башня)\n");
+    printf("[1] Создать / пересоздать персонажа\n");
+    printf("[2] Карточка персонажа\n");
+    printf("[3] Режим дня и управление временем\n");
+    printf("[4] Посмотреть инвентарь\n");
+    printf("[5] Положить предмет в слот\n");
+    printf("[6] Выбросить предмет\n");
+    printf("[7] Задание лаб 1 (Устранение дубликатов)\n");
+    printf("[8] Поиск предмета по названию\n");
+    printf("[9] Записать состояние в дневник (diary.txt)\n");
+    printf("[10] Распаковать карту участка (output.txt)\n");
+    printf("[11] Отправиться в приключение (Башня)\n");
     printf("----------------------------------------\n");
     printf("Выберите пункт меню: ");
 }
 
-void handle_work(int *day, int *hour) {
-    int hours_to_work;
-    printf("Сколько часов вы хотите потратить на работу? ");
-    if (scanf("%d", &hours_to_work) != 1) {
+int check_player_exists(const Player *player) {
+    if (player == NULL) {
         printf("\n----------------------------------------\n");
-        printf("Ошибка: введено не число!\n");
+        printf("Ошибка: персонаж ещё не создан! Выберите пункт [1] в меню.\n");
         printf("----------------------------------------\n");
-        clear_input_buffer();
-        return;
+        return 0;
     }
-
-    if (hours_to_work < 0) {
-        printf("\n----------------------------------------\n");
-        printf("Количество часов не может быть отрицательным!\n");
-        printf("----------------------------------------\n");
-        return;
-    }
-
-    wait_hours(day, hour, hours_to_work);
-    print_time(*day, *hour);
+    return 1;
 }
 
 void print_inventory(const int inventory[], int size, const char item_names[MAX_ITEMS][MAX_NAME_LEN]) {
@@ -343,7 +324,18 @@ void print_map(char **map, int height, int width, int player_x, int player_y, in
     printf("----------------------------------------\n");
 }
 
-void handle_adventure(void) {
+void handle_adventure(Player *player) {
+    if (!check_player_exists(player)) {
+        return;
+    }
+
+    if (player->stamina <= 0) {
+        printf("\n----------------------------------------\n");
+        printf("У вас нет сил для похода (Выносливость: 0)! Отдохните и выспитесь.\n");
+        printf("----------------------------------------\n");
+        return;
+    }
+
     int height = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
     int width = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
 
@@ -360,7 +352,7 @@ void handle_adventure(void) {
     int current_floor = 1;
     int in_tower = 1;
 
-    printf("\nВы вошли в древнюю башню! Постарайтесь выжить и подняться выше.\n");
+    printf("\nВы (%s, класс %s) вошли в древнюю башню!\n", player->name, get_profession_name(player->profession));
 
     while (in_tower) {
         print_map(map, height, width, player_x, player_y, current_floor);
@@ -486,11 +478,10 @@ void handle_adventure(void) {
 
 int main(void) {
     srand((unsigned int)time(NULL));
-    char farmer_name[MAX_NAME_LEN];
+    Player *player = NULL;
     char item_names[MAX_ITEMS][MAX_NAME_LEN];
     int current_day = 1;
     int current_hour = 8;
-    int inventory[INVENTORY_SIZE] = {1, 2, 1, 3, 0, 2, 4, 1, 5, 4};
     int is_running = 1;
     int choice;
 
@@ -498,10 +489,8 @@ int main(void) {
         printf("Предупреждение: файл items.txt не найден! Загружены базовые названия.\n");
     }
 
-    get_farmer_name(farmer_name, MAX_NAME_LEN);
-
     while (is_running) {
-        print_menu(farmer_name);
+        print_menu(player);
 
         if (scanf("%d", &choice) != 1) {
             printf("\n----------------------------------------\n");
@@ -515,48 +504,74 @@ int main(void) {
             case 0:
                 printf("\n----------------------------------------\n");
                 printf("Завершение работы программы.\n");
+                if (player != NULL) {
+                    free_player(&player);
+                }
                 printf("----------------------------------------\n");
                 is_running = 0;
                 break;
 
             case 1:
-                print_time(current_day, current_hour);
+                player = handle_create_or_recreate_player(player);
                 break;
 
             case 2:
-                handle_work(&current_day, &current_hour);
+                print_player_card(player, current_day, current_hour, item_names);
                 break;
 
-            case 3:
-                print_inventory(inventory, INVENTORY_SIZE, item_names);
+            case 3: {
+                int prev_day = current_day;
+                handle_time_menu(&current_day, &current_hour);
+                if (current_day > prev_day && player != NULL) {
+                    player->hp = player->max_hp;
+                    player->stamina = player->max_stamina;
+                    printf("\nВы отлично выспались! Здоровье (%d HP) и выносливость (%d) полностью восстановлены.\n", player->hp, player->stamina);
+                }
                 break;
+            }
 
             case 4:
-                handle_put_item(inventory, INVENTORY_SIZE, item_names);
+                if (check_player_exists(player)) {
+                    print_inventory(player->inventory, INVENTORY_SIZE, item_names);
+                }
                 break;
 
             case 5:
-                handle_clear_slot(inventory, INVENTORY_SIZE);
+                if (check_player_exists(player)) {
+                    handle_put_item(player->inventory, INVENTORY_SIZE, item_names);
+                }
                 break;
 
             case 6:
-                handle_duplicates(inventory, INVENTORY_SIZE, item_names);
+                if (check_player_exists(player)) {
+                    handle_clear_slot(player->inventory, INVENTORY_SIZE);
+                }
                 break;
 
             case 7:
-                handle_search_item(inventory, INVENTORY_SIZE, item_names);
+                if (check_player_exists(player)) {
+                    handle_duplicates(player->inventory, INVENTORY_SIZE, item_names);
+                }
                 break;
 
             case 8:
-                handle_save_diary(farmer_name, current_day, current_hour, inventory, INVENTORY_SIZE, item_names);
+                if (check_player_exists(player)) {
+                    handle_search_item(player->inventory, INVENTORY_SIZE, item_names);
+                }
                 break;
 
             case 9:
-                handle_unpack_map();
+                if (check_player_exists(player)) {
+                    handle_save_diary(player->name, current_day, current_hour, player->inventory, INVENTORY_SIZE, item_names);
+                }
                 break;
 
             case 10:
-                handle_adventure();
+                handle_unpack_map();
+                break;
+
+            case 11:
+                handle_adventure(player);
                 break;
 
             default:

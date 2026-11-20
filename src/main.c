@@ -95,6 +95,7 @@ void print_menu(const char *farmer_name) {
     printf("[7] Поиск предмета по названию\n");
     printf("[8] Записать состояние в дневник (diary.txt)\n");
     printf("[9] Распаковать карту участка (output.txt)\n");
+    printf("[10] Отправиться в приключение (Башня)\n");
     printf("----------------------------------------\n");
     printf("Выберите пункт меню: ");
 }
@@ -579,6 +580,103 @@ void print_map(char **map, int height, int width, int player_x, int player_y, in
     printf("----------------------------------------\n");
 }
 
+void handle_adventure(void) {
+    int height = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
+    int width = MIN_TOWER_SIZE + rand() % (MAX_TOWER_SIZE - MIN_TOWER_SIZE + 1);
+
+    char **map = create_map(height, width);
+    if (map == NULL) {
+        printf("\n----------------------------------------\n");
+        printf("Ошибка: не удалось выделить память под карту башни!\n");
+        printf("----------------------------------------\n");
+        return;
+    }
+
+    int player_x, player_y, up_x, up_y;
+    generate_tower_floor(map, height, width, &player_x, &player_y, &up_x, &up_y);
+    int current_floor = 1;
+    int in_tower = 1;
+
+    printf("\nВы вошли в древнюю башню! Постарайтесь выжить и подняться выше.\n");
+
+    while (in_tower) {
+        print_map(map, height, width, player_x, player_y, current_floor);
+
+        printf("Управление: [W] вверх, [A] влево, [S] вниз, [D] вправо, [Q] сбежать домой\n");
+        printf("Ваш ход: ");
+
+        char input[16];
+        if (scanf("%15s", input) != 1) {
+            clear_input_buffer();
+            continue;
+        }
+
+        char move = input[0];
+        int dx = 0;
+        int dy = 0;
+
+        if (move == 'w' || move == 'W') {
+            dy = -1;
+        } else if (move == 's' || move == 'S') {
+            dy = 1;
+        } else if (move == 'a' || move == 'A') {
+            dx = -1;
+        } else if (move == 'd' || move == 'D') {
+            dx = 1;
+        } else if (move == 'q' || move == 'Q') {
+            if (map[player_y][player_x] == 'D') {
+                printf("\nВы стоите на лестнице вниз и благополучно сбегаете домой на ферму!\n");
+                in_tower = 0;
+                break;
+            } else {
+                printf("\n----------------------------------------\n");
+                printf("Сбежать домой нельзя! Выход (Q) возможен только с лестницы вниз (D).\n");
+                printf("----------------------------------------\n");
+                continue;
+            }
+        } else {
+            printf("\n----------------------------------------\n");
+            printf("Неизвестная команда! Используйте W, A, S, D или Q.\n");
+            printf("----------------------------------------\n");
+            continue;
+        }
+
+        int target_x = player_x + dx;
+        int target_y = player_y + dy;
+
+        if (target_x < 0 || target_x >= width || target_y < 0 || target_y >= height) {
+            printf("\n----------------------------------------\n");
+            printf("Вы не можете выйти за границы карты!\n");
+            printf("----------------------------------------\n");
+            continue;
+        }
+
+        char cell = map[target_y][target_x];
+        if (cell == '#') {
+            printf("\n----------------------------------------\n");
+            printf("Там каменная стена! Прохода нет.\n");
+            printf("----------------------------------------\n");
+            continue;
+        } else if (cell == 'T' || cell == 'R') {
+            printf("\n----------------------------------------\n");
+            printf("Путь преграждает препятствие (%s)!\n", cell == 'T' ? "обломок балки" : "груда камней");
+            printf("----------------------------------------\n");
+            continue;
+        }
+
+        player_x = target_x;
+        player_y = target_y;
+
+        if (map[player_y][player_x] == 'U') {
+            printf("\nВы стоите перед лестницей на следующий этаж (U)!\n");
+        } else if (map[player_y][player_x] == 'D') {
+            printf("\nВы стоите на лестнице вниз (D). Отсюда можно сбежать домой (Q).\n");
+        }
+    }
+
+    free_map(map, height);
+}
+
 int main(void) {
     srand((unsigned int)time(NULL));
     char farmer_name[MAX_NAME_LEN];
@@ -648,6 +746,10 @@ int main(void) {
 
             case 9:
                 handle_unpack_map();
+                break;
+
+            case 10:
+                handle_adventure();
                 break;
 
             default:

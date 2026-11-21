@@ -2,6 +2,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "utils.h"
 #include "player.h"
 #include "map.h"
@@ -419,6 +422,10 @@ void handle_adventure(Player *player, int *current_day, int *current_hour) {
 }
 
 int main(void) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
     srand((unsigned int)time(NULL));
     Player *player = NULL;
     char item_names[MAX_ITEMS][MAX_NAME_LEN];
